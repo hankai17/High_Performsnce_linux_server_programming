@@ -1,3 +1,8 @@
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE         // See feature_test_macros(7) 
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,6 +17,10 @@
 
 #include <sys/sendfile.h>
 
+
+
+#include <poll.h>
+
 #define ERR_EXIT(m) \
         do \
         { \
@@ -19,6 +28,25 @@
                 exit(EXIT_FAILURE); \
         } while(0)
 
+/*
+       #include <poll.h>
+
+       int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
+       #define _GNU_SOURCE         // See feature_test_macros(7) 
+       #include <poll.h>
+
+       int ppoll(struct pollfd *fds, nfds_t nfds,
+               const struct timespec *timeout_ts, const sigset_t *sigmask);
+	
+	   struct pollfd {
+	   int   fd;         // file descriptor 
+	   short events;     // requested events 
+	   short revents;    // returned events 
+   };
+
+*/
+			
 int main( int argc, char* argv[] )
 {
 	if( argc <= 2 )
@@ -63,49 +91,68 @@ int main( int argc, char* argv[] )
 	printf( "connected with ip: %s and port: %d\n", inet_ntop( AF_INET, &client_address.sin_addr, remote_addr, INET_ADDRSTRLEN ), ntohs( client_address.sin_port ) );
 
 	char buf[1024];
-	fd_set read_fds;
-	fd_set exception_fds;
-
-	FD_ZERO( &read_fds );
-	FD_ZERO( &exception_fds );
+	struct pollfd polfd[2];
+	polfd[0].fd = connfd;
+	polfd[0].events = POLLIN;
+	
+	polfd[1].fd = connfd;
+	polfd[1].events = POLLRDHUP;
+	nfds_t num = 2;
+	
 
 	int nReuseAddr = 1;
 	setsockopt( connfd, SOL_SOCKET, SO_OOBINLINE, &nReuseAddr, sizeof( nReuseAddr ) );
-	while( 1 )
+	
+	bool Flage = true;
+	while( Flage )
 	{
 		memset( buf, '\0', sizeof( buf ) );
-		FD_SET( connfd, &read_fds );
-		FD_SET( connfd, &exception_fds );
-
-        ret = select( connfd + 1, &read_fds, NULL, &exception_fds, NULL );
-		printf( "select one\n" );
-		if ( ret < 0 )
+		
+		ret = poll(polfd, num, 3000);
+		if ( ret == 0 )
 		{
-				printf( "selection failure\n" );
+			printf("timeout 300 millionsecond\n");
+		}
+		else if ( ret == -1 )
+		{
+				printf( "poll failure\n" );
 				break;
 		}
-	
-        if ( FD_ISSET( connfd, &read_fds ) )
+		
+		for (int i = 0; i < 2; ++i)
 		{
-        	ret = recv( connfd, buf, sizeof( buf )-1, 0 );
-			if( ret <= 0 )
+			/*
+			if (polfd[i].revents & POLLIN)
 			{
-				break;
-			}
-			printf( "get %d bytes of normal data: %s\n", ret, buf );
-			
-			
-			send(connfd, buf, sizeof(buf), 0);
-		}
-		else if( FD_ISSET( connfd, &exception_fds ) )
-        	{
-        		ret = recv( connfd, buf, sizeof( buf )-1, MSG_OOB );
-				if( ret <= 0 )
+				int sockfd = polfd[i].fd;
+				ret = recv( connfd, buf, sizeof( buf )-1, MSG_DONTWAIT|MSG_PEEK);
+				//¿Í»§¶Ë¹Ø±Õ
+				if( ret == 0 || (ret < 0 && errno != EAGAIN) )
 				{
+					printf("the client %d exit....\n", polfd[i].fd);
+					Flage = false;
 					break;
 				}
-			printf( "get %d bytes of oob data: %s\n", ret, buf );
-        	}
+				
+				ret = recv( connfd, buf, sizeof( buf )-1, 0);
+				printf( "get %d bytes of normal data: %s\n", ret, buf );
+						
+				send(connfd, buf, sizeof(buf), 0);
+			}
+			else if ( polfd[i].revents & POLLRDHUP )
+			{
+				printf("POLLRDHUP the client %d exit....\n", polfd[i].fd);
+				Flage = false;
+				break;
+			}*/
+			if ( polfd[i].revents & POLLRDHUP )
+			{
+				printf("POLLRDHUP the client %d exit....\n", polfd[i].fd);
+				Flage = false;
+				break;
+			}
+			
+		}	
 
 	}
 
