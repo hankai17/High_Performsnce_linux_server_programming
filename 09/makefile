@@ -1,12 +1,12 @@
 .PHONY:clean all
 CC=gcc
 CFLAGS= -Wall -g
-BIN= use_poll poll_client poll_client2
+BIN= 9-3mtlt
 all:$(BIN)
 %.o:%.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-poll_client2:poll_client2.o 
+9-3mtlt:9-3mtlt.o 
 	$(CC) $(CFLAGS) $^ -o $@ 
 	
 #9-1use_select_thread:9-1use_select_thread.o 
